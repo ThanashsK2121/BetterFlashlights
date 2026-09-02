@@ -1,8 +1,0 @@
-{
-  "name": "BetterFlashlights",
-  "version": "1.0.0",
-  "main": "BetterFlashlights.dll",
-  "author": "THANASHSK",
-  "description": "Fully customize your weapon flashlight RGB colors, range, and intensity via the F12 menu.",
-  "sptVersion": "~4.1.1"
-}
