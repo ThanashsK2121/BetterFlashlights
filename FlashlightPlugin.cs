@@ -11,6 +11,14 @@ namespace BetterFlashlights
     {
         public Light lightComponent;
         public bool isPlayerLight;
+
+        public Color originalColor;
+        public float originalRange;
+        public float originalIntensity;
+        public float originalSpotAngle;
+        public Texture originalCookie;
+        public bool hasSavedDefaults = false;
+        public bool wasModifiedByMod = false;
     }
 
     [BepInPlugin("com.custom.flashlightmodifier", "Better Flashlights", "1.0.0")]
@@ -121,7 +129,7 @@ namespace BetterFlashlights
                 if (mainCamCache == null) mainCamCache = Camera.main;
 
                 Light[] allLights = Resources.FindObjectsOfTypeAll<Light>();
-                cachedTarkovLights.Clear();
+                List<CachedFlashlight> newScanList = new List<CachedFlashlight>();
 
                 foreach (Light light in allLights)
                 {
@@ -129,14 +137,35 @@ namespace BetterFlashlights
 
                     if (IsTarkovFlashlight(light))
                     {
-                        bool isPlayer = IsPlayerLight(light);
-                        cachedTarkovLights.Add(new CachedFlashlight
+                        CachedFlashlight existing = cachedTarkovLights.Find(c => c.lightComponent == light);
+                        if (existing != null)
                         {
-                            lightComponent = light,
-                            isPlayerLight = isPlayer
-                        });
+                            newScanList.Add(existing);
+                        }
+                        else
+                        {
+                            bool isPlayer = IsPlayerLight(light);
+                            CachedFlashlight newLight = new CachedFlashlight
+                            {
+                                lightComponent = light,
+                                isPlayerLight = isPlayer
+                            };
+
+                            // Αποθήκευση defaults ΚΑΤΕΥΘΕΙΑΝ στο σκανάρισμα, ακόμα και αν ο φακός είναι σβηστός
+                            newLight.originalColor = light.color;
+                            newLight.originalRange = light.range;
+                            newLight.originalIntensity = light.intensity;
+                            newLight.originalSpotAngle = light.spotAngle;
+                            newLight.originalCookie = light.cookie;
+                            newLight.hasSavedDefaults = true;
+
+                            newScanList.Add(newLight);
+                        }
                     }
                 }
+
+                cachedTarkovLights.Clear();
+                cachedTarkovLights.AddRange(newScanList);
                 yield return waitTime;
             }
         }
@@ -181,63 +210,74 @@ namespace BetterFlashlights
                 if (cachedLight == null) continue;
 
                 Light light = cachedLight.lightComponent;
-                if (light != null && light.isActiveAndEnabled)
+                if (light != null)
                 {
-                    if (light.cookie != null)
-                    {
-                        string cookieName = light.cookie.name.ToLower();
-                        if (cookieName.Contains("laser") || cookieName.Contains("dot") ||
-                            cookieName.Contains("point") || cookieName.Contains("ir") ||
-                            cookieName.Contains("red") || cookieName.Contains("green"))
-                        {
-                            continue;
-                        }
-                    }
-
-                    if (light.spotAngle < 6.0f || light.range < 6.0f)
-                    {
-                        continue;
-                    }
-
-                    float distToCam = (mainCamCache != null) ? Vector3.Distance(light.transform.position, mainCamCache.transform.position) : 100f;
-
                     if (cachedLight.isPlayerLight)
                     {
-                        ApplyPlayerFlashlightSettings(light, baseIntensity * currentFlickerModifier, calculatedColor);
+                        if (light.isActiveAndEnabled)
+                        {
+                            ApplyPlayerFlashlightSettings(light, baseIntensity * currentFlickerModifier, calculatedColor);
+                        }
                     }
                     else
                     {
-                      
-                        if (!ModifyBotLights.Value) continue;
-
-                        LightShadows shadowType = (distToCam < 40f) ? LightShadows.Hard : LightShadows.None;
-                        ApplyBotFlashlightSettings(light, baseIntensity, calculatedColor, shadowType);
+                        // Αν το κουμπί είναι OFF, επανέφερε άμεσα ΟΛΑ τα bots που είχαν πειραχτεί
+                        if (!ModifyBotLights.Value)
+                        {
+                            if (cachedLight.wasModifiedByMod && cachedLight.hasSavedDefaults)
+                            {
+                                light.color = cachedLight.originalColor;
+                                light.range = cachedLight.originalRange;
+                                light.intensity = cachedLight.originalIntensity;
+                                light.spotAngle = cachedLight.originalSpotAngle;
+                                light.cookie = cachedLight.originalCookie;
+                                cachedLight.wasModifiedByMod = false;
+                            }
+                            continue;
+                        }
+                        // Αν είναι ON και ο φακός ανάψει, εφάρμοσε το mod
+                        if (light.isActiveAndEnabled)
+                        {
+                            if (light.cookie != null && light.cookie != customBeamCookie)
+                            {
+                                string cookieName = light.cookie.name.ToLower();
+                                if (cookieName.Contains("laser") || cookieName.Contains("dot") ||
+                                cookieName.Contains("point") || cookieName.Contains("ir") ||
+                                cookieName.Contains("red") || cookieName.Contains("green"))
+                                {
+                                    continue;
+                                }
+                            }
+                            if (light.spotAngle < 6.0f || light.range < 6.0f)
+                            {
+                                continue;
+                            }
+                            float distToCam = (mainCamCache != null) ? Vector3.Distance(light.transform.position, mainCamCache.transform.position) : 100f;
+                            LightShadows shadowType = (distToCam < 40f) ? LightShadows.Hard : LightShadows.None;
+                            ApplyBotFlashlightSettings(light, baseIntensity, calculatedColor, shadowType);
+                            cachedLight.wasModifiedByMod = true;
+                        }
                     }
                 }
             }
         }
-
         private bool IsPlayerLight(Light light)
         {
             if (light == null) return false;
             if (light.gameObject.layer == 24) return true;
-
             if (mainCamCache != null && Vector3.Distance(light.transform.position, mainCamCache.transform.position) < 1.2f)
             {
                 return true;
             }
-
             Transform current = light.transform;
             while (current != null)
             {
                 if (current.gameObject.layer == 24) return true;
-
                 string parentName = current.name.ToLower();
                 if (parentName.Contains("observed") || parentName.Contains("bot") || parentName.Contains("client") || parentName.Contains("corpse"))
                 {
                     return false;
                 }
-
                 if (parentName.Contains("fps") || parentName.Contains("camera") || parentName.Contains("localplayer") || parentName.Contains("player"))
                 {
                     return true;
@@ -309,6 +349,17 @@ namespace BetterFlashlights
         private void OnDestroy()
         {
             if (scanCoroutine != null) StopCoroutine(scanCoroutine);
+            foreach (var cached in cachedTarkovLights)
+            {
+                if (cached != null && cached.lightComponent != null && cached.hasSavedDefaults)
+                {
+                    cached.lightComponent.color = cached.originalColor;
+                    cached.lightComponent.range = cached.originalRange;
+                    cached.lightComponent.intensity = cached.originalIntensity;
+                    cached.lightComponent.spotAngle = cached.originalSpotAngle;
+                    cached.lightComponent.cookie = cached.originalCookie;
+                }
+            }
             cachedTarkovLights.Clear();
         }
     }
