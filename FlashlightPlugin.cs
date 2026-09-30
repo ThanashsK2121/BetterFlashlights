@@ -21,7 +21,7 @@ namespace BetterFlashlights
         public bool wasModifiedByMod = false;
     }
 
-    [BepInPlugin("com.custom.flashlightmodifier", "Better Flashlights", "1.0.0")]
+    [BepInPlugin("com.custom.flashlightmodifier", "Better Flashlights", "1.0.1")]
     public class FlashlightPlugin : BaseUnityPlugin
     {
         public static FlashlightPlugin Instance;
@@ -56,7 +56,7 @@ namespace BetterFlashlights
 
             FlashlightIntensity = Config.Bind("2. Flashlight Settings", "Intensity", 15.0f, new ConfigDescription("Intensity", new AcceptableValueRange<float>(1f, 50f)));
             FlashlightRange = Config.Bind("2. Flashlight Settings", "Range (Meters)", 70.0f, new ConfigDescription("Range", new AcceptableValueRange<float>(10f, 200f)));
-            FlashlightSpotAngle = Config.Bind("2. Flashlight Settings", "Spot Angle", 35.0f, new ConfigDescription("Angle of the beam", new AcceptableValueRange<float>(5.0f, 120f)));
+            FlashlightSpotAngle = Config.Bind("2. Flashlight Settings", "Spot Angle", 35.0f, new ConfigDescription("Angle of the beam", new AcceptableValueRange<float>(21.0f, 120f)));
 
             FlashlightKelvin = Config.Bind("3. LED Temperature", "Color Temperature (Kelvin)", 6500f, new ConfigDescription("2000K = Warm, 12000K = ABI Ultra Cool", new AcceptableValueRange<float>(2000f, 12000f)));
 
@@ -151,7 +151,6 @@ namespace BetterFlashlights
                                 isPlayerLight = isPlayer
                             };
 
-                            // Αποθήκευση defaults ΚΑΤΕΥΘΕΙΑΝ στο σκανάρισμα, ακόμα και αν ο φακός είναι σβηστός
                             newLight.originalColor = light.color;
                             newLight.originalRange = light.range;
                             newLight.originalIntensity = light.intensity;
@@ -212,6 +211,13 @@ namespace BetterFlashlights
                 Light light = cachedLight.lightComponent;
                 if (light != null)
                 {
+                    // ΦΙΛΤΡΟ GAMEOBJECT: Αν το όνομα περιέχει laser, point ή impact, είναι το light εφέ του laser. Skip!
+                    string lightObjName = light.gameObject.name.ToLower();
+                    if (lightObjName.Contains("laser") || lightObjName.Contains("point") || lightObjName.Contains("impact") || lightObjName.Contains("red_dot"))
+                    {
+                        continue;
+                    }
+
                     if (cachedLight.isPlayerLight)
                     {
                         if (light.isActiveAndEnabled)
@@ -221,7 +227,6 @@ namespace BetterFlashlights
                     }
                     else
                     {
-                        // Αν το κουμπί είναι OFF, επανέφερε άμεσα ΟΛΑ τα bots που είχαν πειραχτεί
                         if (!ModifyBotLights.Value)
                         {
                             if (cachedLight.wasModifiedByMod && cachedLight.hasSavedDefaults)
@@ -235,7 +240,6 @@ namespace BetterFlashlights
                             }
                             continue;
                         }
-                        // Αν είναι ON και ο φακός ανάψει, εφάρμοσε το mod
                         if (light.isActiveAndEnabled)
                         {
                             if (light.cookie != null && light.cookie != customBeamCookie)
@@ -247,10 +251,6 @@ namespace BetterFlashlights
                                 {
                                     continue;
                                 }
-                            }
-                            if (light.spotAngle < 6.0f || light.range < 6.0f)
-                            {
-                                continue;
                             }
                             float distToCam = (mainCamCache != null) ? Vector3.Distance(light.transform.position, mainCamCache.transform.position) : 100f;
                             LightShadows shadowType = (distToCam < 40f) ? LightShadows.Hard : LightShadows.None;
@@ -290,7 +290,7 @@ namespace BetterFlashlights
         {
             if (light.color != targetColor) light.color = targetColor;
             if (!Mathf.Approximately(light.range, FlashlightRange.Value)) light.range = FlashlightRange.Value;
-            float targetAngle = Mathf.Clamp(FlashlightSpotAngle.Value, 6.0f, 120.0f);
+            float targetAngle = Mathf.Clamp(FlashlightSpotAngle.Value, 21.0f, 120.0f);
             if (!Mathf.Approximately(light.spotAngle, targetAngle)) light.spotAngle = targetAngle;
             light.intensity = intensityToApply;
             if (light.cookie != customBeamCookie) light.cookie = customBeamCookie;
@@ -302,7 +302,7 @@ namespace BetterFlashlights
         {
             if (light.color != targetColor) light.color = targetColor;
             if (!Mathf.Approximately(light.range, FlashlightRange.Value)) light.range = FlashlightRange.Value;
-            float targetAngle = Mathf.Clamp(FlashlightSpotAngle.Value, 6.0f, 120.0f);
+            float targetAngle = Mathf.Clamp(FlashlightSpotAngle.Value, 21.0f, 120.0f);
             if (!Mathf.Approximately(light.spotAngle, targetAngle)) light.spotAngle = targetAngle;
             if (!Mathf.Approximately(light.intensity, intensityToApply)) light.intensity = intensityToApply;
             if (light.cookie != customBeamCookie) light.cookie = customBeamCookie;
@@ -329,7 +329,7 @@ namespace BetterFlashlights
                 {
                     if (objName.Contains(deviceKeyword))
                     {
-                        if (objName.Contains("laser") && !objName.Contains("light") && !objName.Contains("klesh") && !objName.Contains("x400") && !objName.Contains("baldr"))
+                        if (objName.Contains("laser") && !objName.Contains("light") && !objName.Contains("klesh") && !objName.Contains("x400") && !objName.Contains("baldr") && !objName.Contains("dbal"))
                         {
                             return false;
                         }
