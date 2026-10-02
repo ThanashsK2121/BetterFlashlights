@@ -1,4 +1,4 @@
-# Better Flashlights (v1.0.0)
+# Better Flashlights (v1.0.1)
 
 A lightweight, highly optimized client-side BepInEx plugin for SPT that completely overhauls tactical weapon flashlights for both the player and bots.
 
